@@ -35,22 +35,6 @@ def index_search():
 
 
 def create_search_result(title, url, display_url, description):
-	# return {
-	# 	"title": title,
-	# 	"url": url,
-	# 	"display_url": {
-	# 		"content": display_url,
-	# 		"hitHighlights": []
-	# 	},
-	# 	"description": description,
-	# 	"descriptions": {
-	# 		"content": description,
-	# 		"hitHighlights": []
-	# 	},
-	# 	"lastUpdateDate": "2000-01-01T00:00:00+00:00",
-	# 	"breadcrumbs": []
-	# }
-
 	return {
          "title":title,
          "url": url,
