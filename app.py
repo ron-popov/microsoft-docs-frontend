@@ -16,8 +16,8 @@ except:
 	from bs4 import BeautifulSoup
 
 # Consts
-ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
-SEARCH_DIR_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
+SDK_API_ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
+SEARCH_DIRS_PATH = [r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content\psapi"]
 WHOOSH_INDEX_DIR = r"whoosh-index"
 TITLE_IN_MARKDOWN_PAGE_REGEX = r"title: (.*)\n"
 
@@ -50,19 +50,24 @@ def init_search_engine():
 		app.ix = index.create_in(WHOOSH_INDEX_DIR, schema)
 		writer = app.ix.writer()
 
-		for root, _, files in os.walk(SEARCH_DIR_PATH):
-			for name in files:
-				md_path = os.path.join(root, name)
+		for search_dir_path in SEARCH_DIRS_PATH:
+			for root, _, files in os.walk(search_dir_path):
+				for name in files:
+					md_path = os.path.join(root, name)
 
-				if not md_path.endswith(".md"):
-					continue
+					if not md_path.endswith(".md"):
+						continue
 
-				try:
-					mardown_page_content = open(os.path.join(SEARCH_DIR_PATH, md_path), "r").read()
-				except:
-					mardown_page_content = ""
-				title, content = parse_md_page(md_path, mardown_page_content)
-				writer.add_document(title=title, content=content, path=os.path.join(SEARCH_DIR_PATH, md_path))
+					try:
+						mardown_page_content = open(os.path.join(search_dir_path, md_path), "r").read()
+					except:
+						mardown_page_content = ""
+					title, content = parse_md_page(md_path, mardown_page_content)
+
+					title = title.replace("-", " ")
+					title = title.replace("_", " ")
+
+					writer.add_document(title=title, content=content, path=os.path.join(search_dir_path, md_path))
 
 		writer.commit()
 	else:
@@ -107,6 +112,9 @@ def serve_javascript(subpath):
 @app.route("/<path:subpath>")
 def default_html_page(subpath):
 	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	if not file_path.endswith(".md"):
+		file_path = file_path + ".md"
+
 	try:
 		markdown_content = open(file_path, "r").read()
 	except:
@@ -117,8 +125,21 @@ def default_html_page(subpath):
 	headers_end_index = markdown_content.index("---\n\n")
 	markdown_content = markdown_content[headers_end_index+5:]
 
+	# Remove annoying dash at the start of title 
+	markdown_content = markdown_content.replace("# -", "# ")
+
+	# Make titles smaller
+	markdown_content = markdown_content.replace("\n## ", "\n### ")
+	markdown_content = markdown_content.replace("\n### ", "\n#### ")
+	markdown_content = markdown_content.replace("\n#### ", "\n##### ")
+	markdown_content = markdown_content.replace("\n##### ", "\n###### ")
+
 	html_content = markdown.markdown(markdown_content)
 	return render_template("view.html", html_content=html_content)
+
+@app.route("/windows/desktop/api/<path:subpath>")
+def windows_desktop_api(subpath):
+	return default_html_page(subpath)
 
 
 
@@ -184,12 +205,16 @@ def api_search_call():
 		results = searcher.search(q)
 
 		for result in results:
-			web_server_path = os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH)
+			# web_server_path = os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH)
+			target_url = os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH)
+			if target_url[0] != "\\":
+				target_url = "\\" + target_url
+
 			json_dict["results"].append(
 				create_search_result(
 					result["title"], 
-					os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH),
-					os.path.relpath(result["path"], SEARCH_DIR_PATH), 
+					target_url,
+					target_url,
 					"description"
 				)
 			)
