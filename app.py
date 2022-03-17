@@ -8,6 +8,7 @@ import json
 import pathlib
 import os
 import re
+import markdown
 
 try:
 	from BeautifulSoup import BeautifulSoup
@@ -16,8 +17,7 @@ except:
 
 # Consts
 ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
-SEARCH_DIR_PATH = r"D:\MSDN-Scrape\httrack\MSND-PSAPI\docs.microsoft.com\en-us\windows\win32\psapi"
-SEARCH_DIR_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content\psapi"
+SEARCH_DIR_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
 WHOOSH_INDEX_DIR = r"whoosh-index"
 TITLE_IN_MARKDOWN_PAGE_REGEX = r"title: (.*)\n"
 
@@ -106,7 +106,19 @@ def serve_javascript(subpath):
 
 @app.route("/<path:subpath>")
 def default_html_page(subpath):
-	return render_template("view.html")
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	try:
+		markdown_content = open(file_path, "r").read()
+	except:
+		app.logger.error("Failed opening markdown file {}".format(file_path))
+		return send_file('static/html/404-page.html'), 404
+
+	# Remove docs headers from content
+	headers_end_index = markdown_content.index("---\n\n")
+	markdown_content = markdown_content[headers_end_index+5:]
+
+	html_content = markdown.markdown(markdown_content)
+	return render_template("view.html", html_content=html_content)
 
 
 
