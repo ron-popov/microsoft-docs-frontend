@@ -5,10 +5,10 @@ from whoosh.fields import Schema, TEXT
 from whoosh.qparser import QueryParser
 
 import json
-import pathlib
 import os
 import re
 import markdown
+import logging
 
 try:
 	from BeautifulSoup import BeautifulSoup
@@ -16,8 +16,8 @@ except:
 	from bs4 import BeautifulSoup
 
 # Consts
-SDK_API_ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content"
-SEARCH_DIRS_PATH = [r"D:\MSDN-Scrape\sdk-api-docs\sdk-api-src\content\psapi"]
+ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\docs"
+SEARCH_DIR_PATH = r"D:\MSDN-Scrape\docs"
 WHOOSH_INDEX_DIR = r"whoosh-index"
 TITLE_IN_MARKDOWN_PAGE_REGEX = r"title: (.*)\n"
 
@@ -28,6 +28,8 @@ CUSTOM_MIME_TYPES = {
 
 
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
+
 app.ix = None
 
 ### Initialize search engine
@@ -50,38 +52,46 @@ def init_search_engine():
 		app.ix = index.create_in(WHOOSH_INDEX_DIR, schema)
 		writer = app.ix.writer()
 
-		for search_dir_path in SEARCH_DIRS_PATH:
-			for root, _, files in os.walk(search_dir_path):
-				for name in files:
-					md_path = os.path.join(root, name)
+		app.logger.info("Started indexing documents")
 
-					if not md_path.endswith(".md"):
-						continue
+		failed_titles = 0
+		for root, _, files in os.walk(SEARCH_DIR_PATH):
+			for name in files:
+				md_path = os.path.join(root, name)
 
-					try:
-						mardown_page_content = open(os.path.join(search_dir_path, md_path), "r").read()
-					except:
-						mardown_page_content = ""
-					title, content = parse_md_page(md_path, mardown_page_content)
+				if not md_path.endswith(".md"):
+					continue
 
-					title = title.replace("-", " ")
-					title = title.replace("_", " ")
+				try:
+					mardown_page_content = open(os.path.join(SEARCH_DIR_PATH, md_path), "r").read()
+				except:
+					mardown_page_content = ""
+				title, content = parse_md_page(md_path, mardown_page_content)
 
-					writer.add_document(title=title, content=content, path=os.path.join(search_dir_path, md_path))
+				if title == "":
+					failed_titles += 1
+
+				title = title.replace("-", " ")
+				title = title.replace("_", " ")
+
+				writer.add_document(title=title, content=content, path=os.path.join(SEARCH_DIR_PATH, md_path))
 
 		writer.commit()
+		app.logger.error("Failed finding title for {} files".format(failed_titles))
+
+		# with app.ix.searcher() as searcher:
+		# 	for x in searcher.documents():
+		# 		app.logger.debug(x)
 	else:
 		app.ix = index.open_dir(WHOOSH_INDEX_DIR)
 
 def parse_md_page(md_path, md_content):
 	title_result = re.search(TITLE_IN_MARKDOWN_PAGE_REGEX, md_content)
 	if title_result is None or len(title_result.groups()) != 1:
-		app.logger.error("Failed finding title for {}".format(md_path))
 		return "", ""
 
 	title = title_result.groups()[0]
-	app.logger.info("Found title for {}".format(md_path))
-	return title, ""
+	return title, md_content
 
 
 
@@ -109,11 +119,13 @@ def serve_javascript(subpath):
 	except:
 		return send_file('static/html/404-page.html'), 404
 
-@app.route("/<path:subpath>")
-def default_html_page(subpath):
-	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+def render_content_page(file_path):
 	if not file_path.endswith(".md"):
-		file_path = file_path + ".md"
+		content = render_content_page(os.path.join(file_path, "index.md"))
+		if type(content) != tuple or (type(content) == tuple and content[1] != 404):
+			return content
+		else:
+			file_path = file_path + ".md"
 
 	try:
 		markdown_content = open(file_path, "r").read()
@@ -137,9 +149,27 @@ def default_html_page(subpath):
 	html_content = markdown.markdown(markdown_content)
 	return render_template("view.html", html_content=html_content)
 
+@app.route("/<path:subpath>")
+def sdk_api_html_page(subpath):
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
+
+
+
 @app.route("/windows/desktop/api/<path:subpath>")
 def windows_desktop_api(subpath):
-	return default_html_page(subpath)
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
+
+@app.route("/windows/desktop/<path:subpath>")
+def windows_desktop(subpath):
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
+
+@app.route("/windows/<path:subpath>")
+def windows(subpath):
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
 
 
 
@@ -199,13 +229,9 @@ def api_search_call():
 	q = qp.parse(search_string)
 
 	with app.ix.searcher() as searcher:
-		# for x in searcher.documents():
-		# 	print(x)
-
 		results = searcher.search(q)
 
 		for result in results:
-			# web_server_path = os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH)
 			target_url = os.path.relpath(result["path"], ROOT_ABSOLUTE_PATH)
 			if target_url[0] != "\\":
 				target_url = "\\" + target_url
