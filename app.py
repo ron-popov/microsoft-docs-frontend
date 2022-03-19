@@ -81,16 +81,15 @@ def init_search_engine():
 				# Parse description
 				description = parse_md_description(mardown_page_content)
 
-
 				writer.add_document(title=title, content=mardown_page_content, path=os.path.join(SEARCH_DIR_PATH, md_path), description=description)
 
 		app.logger.error("Failed finding title for {} files".format(failed_titles))
 		writer.commit()
 		app.logger.info("Finished indexing all pages")
 
-		with app.ix.searcher() as searcher:
-			for x in searcher.documents():
-				app.logger.debug(x)
+		# with app.ix.searcher() as searcher:
+		# 	for x in searcher.documents():
+		# 		app.logger.debug(x)
 	else:
 		app.ix = index.open_dir(WHOOSH_INDEX_DIR)
 		app.logger.info("Loaded index from existing index")
@@ -248,7 +247,7 @@ def api_search_call():
 	if app.ix is None:
 		raise Exception("Index is not initialized")
 
-	qp = QueryParser("description", schema=app.ix.schema)
+	qp = QueryParser("content", schema=app.ix.schema)
 	q = qp.parse(search_string)
 
 	with app.ix.searcher() as searcher:
