@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, render_template, Response
+from flask import Flask, send_file, request, render_template, Response, redirect
 
 from whoosh import index
 from whoosh.fields import Schema, TEXT
@@ -118,6 +118,10 @@ def page_not_found(error):
 @app.route("/")
 def index_page():
 	return send_file("static/html/search-page.html")
+
+# @app.route("/en-us/documentation")
+# def navbar_documentation():
+# 	return redirect("/")
 
 @app.route("/static/styles/<path:subpath>")
 def serve_css(subpath):
