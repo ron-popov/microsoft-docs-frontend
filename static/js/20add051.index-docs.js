@@ -932,7 +932,7 @@ ${zB}
 		<a
 			class="nav-bar-button"
 			itemprop="url"
-			href="https://www.microsoft.com"
+			href="/"
 			aria-label="Microsoft"
 		>
 			${Dne()}
