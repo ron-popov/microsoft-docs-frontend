@@ -17,9 +17,10 @@ except:
 
 # Consts
 ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\docs"
-SEARCH_DIR_PATH = r"D:\MSDN-Scrape\docs"
+SEARCH_DIR_PATH = r"D:\MSDN-Scrape\docs\psapi"
 WHOOSH_INDEX_DIR = r"whoosh-index"
 TITLE_IN_MARKDOWN_PAGE_REGEX = r"title: (.*)\n"
+DESCRIPTION_IN_MARKDOWN_PAGE_REGEX = r"description: (.*)\n"
 
 CUSTOM_MIME_TYPES = {
 	"js": "text/javascript",
@@ -38,7 +39,8 @@ def init_search_engine():
 	schema = Schema(
 		title=TEXT(stored=True),
 		content=TEXT(stored=True),
-		path=TEXT(stored=True)
+		path=TEXT(stored=True),
+		description=TEXT(stored=True)
 	)
 
 	try:
@@ -66,37 +68,50 @@ def init_search_engine():
 					mardown_page_content = open(os.path.join(SEARCH_DIR_PATH, md_path), "r").read()
 				except:
 					mardown_page_content = ""
-				title, content = parse_md_page(md_path, mardown_page_content)
-
-				if title == "":
+				
+				# Parse title from md pages
+				title = parse_md_title(mardown_page_content)
+				if title is None:
 					failed_titles += 1
+					title = "-Failed Parsing Title-"
 
 				title = title.replace("-", " ")
 				title = title.replace("_", " ")
 
-				writer.add_document(title=title, content=content, path=os.path.join(SEARCH_DIR_PATH, md_path))
+				# Parse description
+				description = parse_md_description(mardown_page_content)
 
-		writer.commit()
+
+				writer.add_document(title=title, content=mardown_page_content, path=os.path.join(SEARCH_DIR_PATH, md_path), description=description)
+
 		app.logger.error("Failed finding title for {} files".format(failed_titles))
+		writer.commit()
+		app.logger.info("Finished indexing all pages")
 
-		# with app.ix.searcher() as searcher:
-		# 	for x in searcher.documents():
-		# 		app.logger.debug(x)
+		with app.ix.searcher() as searcher:
+			for x in searcher.documents():
+				app.logger.debug(x)
 	else:
 		app.ix = index.open_dir(WHOOSH_INDEX_DIR)
+		app.logger.info("Loaded index from existing index")
 
-def parse_md_page(md_path, md_content):
+def parse_md_title(md_content):
 	title_result = re.search(TITLE_IN_MARKDOWN_PAGE_REGEX, md_content)
 	if title_result is None or len(title_result.groups()) != 1:
-		return "", ""
+		return None
 
 	title = title_result.groups()[0]
-	return title, md_content
+	return title
 
+def parse_md_description(md_content):
+	description_result = re.search(DESCRIPTION_IN_MARKDOWN_PAGE_REGEX, md_content)
+	if description_result is None or len(description_result.groups()) != 1:
+		return ""
 
+	description = description_result.groups()[0]
+	return description
 
-
-### General Handlers
+### Route Handlers
 @app.errorhandler(404)
 def page_not_found(error):
 	return send_file('static/html/404-page.html'), 404
@@ -134,6 +149,7 @@ def render_content_page(file_path):
 		return send_file('static/html/404-page.html'), 404
 
 	# Remove docs headers from content
+	title = parse_md_title(markdown_content)
 	headers_end_index = markdown_content.index("---\n\n")
 	markdown_content = markdown_content[headers_end_index+5:]
 
@@ -141,20 +157,30 @@ def render_content_page(file_path):
 	markdown_content = markdown_content.replace("# -", "# ")
 
 	# Make titles smaller
-	markdown_content = markdown_content.replace("\n## ", "\n### ")
-	markdown_content = markdown_content.replace("\n### ", "\n#### ")
-	markdown_content = markdown_content.replace("\n#### ", "\n##### ")
-	markdown_content = markdown_content.replace("\n##### ", "\n###### ")
+	# markdown_content = markdown_content.replace("\n## ", "\n### ")
+	# markdown_content = markdown_content.replace("\n### ", "\n#### ")
+	# markdown_content = markdown_content.replace("\n#### ", "\n##### ")
+	# markdown_content = markdown_content.replace("\n##### ", "\n###### ")
 
-	html_content = markdown.markdown(markdown_content)
-	return render_template("view.html", html_content=html_content)
+	html_content = markdown.markdown(markdown_content, extensions=['fenced_code', 'tables'])
+	html_content = html_content.replace(u"Â", u" ")
+
+	return render_template("view.html", html_content=html_content, title=title)
 
 @app.route("/<path:subpath>")
 def sdk_api_html_page(subpath):
 	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
 	return render_content_page(file_path)
 
+@app.route("/windows/win32/<path:subpath>")
+def windows_win32(subpath):
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
 
+@app.route("/windows/win32/api/<path:subpath>")
+def windows_win32_api(subpath):
+	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
+	return render_content_page(file_path)
 
 @app.route("/windows/desktop/api/<path:subpath>")
 def windows_desktop_api(subpath):
@@ -171,13 +197,10 @@ def windows(subpath):
 	file_path = os.path.join(ROOT_ABSOLUTE_PATH, subpath)
 	return render_content_page(file_path)
 
-
-
 ### Search engine routes
 @app.route("/en-us/search/index")
 def index_search():
 	return send_file("static/html/search-page.html")
-
 
 def create_search_result(title, url, display_url, description):
 	return {
@@ -225,7 +248,7 @@ def api_search_call():
 	if app.ix is None:
 		raise Exception("Index is not initialized")
 
-	qp = QueryParser("title", schema=app.ix.schema)
+	qp = QueryParser("description", schema=app.ix.schema)
 	q = qp.parse(search_string)
 
 	with app.ix.searcher() as searcher:
@@ -240,7 +263,7 @@ def api_search_call():
 				create_search_result(
 					result["title"], 
 					target_url,
-					target_url,
+					target_url[1:],
 					"description"
 				)
 			)
