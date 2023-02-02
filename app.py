@@ -16,11 +16,12 @@ except:
 	from bs4 import BeautifulSoup
 
 # Consts
-ROOT_ABSOLUTE_PATH = r"D:\MSDN-Scrape\docs"
-SEARCH_DIR_PATH = r"D:\MSDN-Scrape\docs\psapi"
+ROOT_ABSOLUTE_PATH = r"/home/ron/microsoft-docs"
+SEARCH_DIR_PATH = r"/home/ron/microsoft-docs/PowerShell-Docs"
 WHOOSH_INDEX_DIR = r"whoosh-index"
 TITLE_IN_MARKDOWN_PAGE_REGEX = r"title: (.*)\n"
 DESCRIPTION_IN_MARKDOWN_PAGE_REGEX = r"description: (.*)\n"
+REINDEX_EACH_RUN = False
 
 CUSTOM_MIME_TYPES = {
 	"js": "text/javascript",
@@ -43,11 +44,12 @@ def init_search_engine():
 		description=TEXT(stored=True)
 	)
 
-	try:
-		import shutil
-		shutil.rmtree(WHOOSH_INDEX_DIR)
-	except:
-		pass
+	if REINDEX_EACH_RUN:
+		try:
+			import shutil
+			shutil.rmtree(WHOOSH_INDEX_DIR)
+		except:
+			pass
 
 	if not os.path.exists(WHOOSH_INDEX_DIR):
 		os.mkdir(WHOOSH_INDEX_DIR)
