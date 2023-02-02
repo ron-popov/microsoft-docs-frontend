@@ -161,12 +161,6 @@ def render_content_page(file_path):
 	# Remove annoying dash at the start of title 
 	markdown_content = markdown_content.replace("# -", "# ")
 
-	# Make titles smaller
-	# markdown_content = markdown_content.replace("\n## ", "\n### ")
-	# markdown_content = markdown_content.replace("\n### ", "\n#### ")
-	# markdown_content = markdown_content.replace("\n#### ", "\n##### ")
-	# markdown_content = markdown_content.replace("\n##### ", "\n###### ")
-
 	html_content = markdown.markdown(markdown_content, extensions=['fenced_code', 'tables'])
 	html_content = html_content.replace(u"Â", u" ")
 

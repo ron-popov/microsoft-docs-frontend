@@ -1,4 +1,6 @@
+## README
+This is a webserver server that displays microsoft-docs for offline use, with search capabilities!
+It uses `flask` as the backend, and `whoosh` for the indexing & search feature.
+
 ## Setup
-To set this frontend you need to pull 2 repos from github, containing msdn docs content 
-* https://github.com/MicrosoftDocs/win32
-* https://github.com/MicrosoftDocs/sdk-api
+To setup the server, clone all of the docs you want to save for offline use from `https://github.com/MicrosoftDocs` and save them all in the same folder.
